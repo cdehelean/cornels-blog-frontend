@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cornel's Blog</title>
+    <!-- Tailwind CSS via CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React, ReactDOM, React Router DOM v5, Babel via CDN -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-router-dom@5/umd/react-router-dom.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <link rel="icon" href="data:,">
+  </head>
+  <body class="bg-gray-50 min-h-screen">
+    <div id="root"></div>
+    <script type="text/babel">
+      // Import React Router DOM hooks and components (v5)
+      const {
+        BrowserRouter,
+        Switch,
+        Route,
+        Link,
+        useHistory,
+        useParams,
+      } = ReactRouterDOM;
+
+      // API base URL
+      const API_URL = 'http://localhost:4000/posts';
+
+      // NavBar component: sticky navigation bar
+      function NavBar() {
+        return (
+          <nav className="bg-white shadow fixed top-0 left-0 w-full z-10">
+            <div className="max-w-3xl mx-auto px-4 py-3 flex justify-between items-center">
+              <Link to="/" className="text-2xl font-bold text-blue-600 tracking-tight">
+                Cornel's Blog
+              </Link>
+              <div className="space-x-4">
+                <Link
+                  to="/"
+                  className="text-gray-700 hover:text-blue-600 font-medium transition-colors"
+                >
+                  Home
+                </Link>
+                <Link
+                  to="/create"
+                  className="text-white bg-blue-600 hover:bg-blue-700 font-medium px-4 py-2 rounded transition-colors"
+                >
+                  Create Post
+                </Link>
+              </div>
+            </div>
+          </nav>
+        );
+      }
+
+      // PostList component: displays a list of blog post cards
+      function PostList({ posts, onDelete }) {
+        return (
+          <div className="grid gap-6 sm:grid-cols-2 mt-8">
+            {posts.length === 0 ? (
+              <div className="col-span-2 text-center text-gray-500">No posts yet.</div>
+            ) : (
+              posts.map((post) => <PostCard key={post.id} post={post} onDelete={onDelete} />)
+            )}
+          </div>
+        );
+      }
+
+      // PostCard component: single post preview card
+      function PostCard({ post, onDelete }) {
+        const history = useHistory();
+        const handleDelete = (e) => {
+          e.preventDefault(); // Prevent navigation
+          if (window.confirm('Delete this post?')) {
+            onDelete(post.id);
+          }
+        };
+        return (
+          <div className="relative group">
+            <Link
+              to={`/post/${post.id}`}
+              className="block bg-white rounded-lg shadow hover:shadow-lg transition-shadow p-6 border border-gray-100 hover:border-blue-200"
+            >
+              <h2 className="text-xl font-semibold text-gray-900 mb-2 line-clamp-2">
+                {post.title}
+              </h2>
+              <p className="text-gray-700 mb-4 line-clamp-3">
+                {post.content.length > 100
+                  ? post.content.slice(0, 100) + "..."
+                  : post.content}
+              </p>
+              <div className="flex items-center justify-between text-sm text-gray-500">
+                <span>By {post.author}</span>
+                <span>{post.date}</span>
+              </div>
+            </Link>
+            <button
+              className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-red-500 text-white rounded px-2 py-1 text-xs shadow hover:bg-red-600"
+              title="Delete post"
+              onClick={handleDelete}
+            >
+              Delete
+            </button>
+          </div>
+        );
+      }
+
+      // EditPostForm component: form to edit an existing blog post
+      function EditPostForm({ post, onSave, saving, onCancel }) {
+        const [title, setTitle] = React.useState(post.title);
+        const [content, setContent] = React.useState(post.content);
+        const [author, setAuthor] = React.useState(post.author);
+        const [error, setError] = React.useState("");
+        const editorRef = React.useRef(null);
+
+        // Set initial content only once
+        React.useEffect(() => {
+          if (editorRef.current) {
+            editorRef.current.innerHTML = post.content || "";
+          }
+        }, [post.content]);
+
+        // Handler for rich text editor
+        const handleContentInput = (e) => {
+          setContent(e.currentTarget.innerHTML);
+        };
+
+        // Toolbar actions
+        const format = (command, value = null) => {
+          document.execCommand(command, false, value);
+          if (editorRef.current) {
+            setContent(editorRef.current.innerHTML);
+            editorRef.current.focus();
+          }
+        };
+        const insertLink = () => {
+          const url = prompt('Enter the URL');
+          if (url) format('createLink', url);
+        };
+
+        const handleSubmit = async () => {
+          if (!title.trim() || !content.trim() || !author.trim()) {
+            setError("All fields are required.");
+            return;
+          }
+          setError("");
+          await onSave({ title: title.trim(), content: content.trim(), author: author.trim() });
+        };
+
+        return (
+          <div className="max-w-xl mx-auto bg-white rounded-lg shadow p-8 mt-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">Edit Post</h2>
+            {error && (
+              <div className="mb-4 text-red-600 text-sm">{error}</div>
+            )}
+            <div className="mb-4">
+              <label className="block text-gray-700 font-medium mb-1">Title</label>
+              <input
+                type="text"
+                className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                maxLength={100}
+                placeholder="Enter post title"
+                disabled={saving}
+              />
+            </div>
+            <div className="mb-4">
+              <label className="block text-gray-700 font-medium mb-1">Content</label>
+              <div className="flex flex-wrap gap-1 mb-2 bg-gray-50 border border-gray-200 rounded px-2 py-1">
+                <button type="button" className="p-1 hover:bg-gray-200 rounded" title="Bold" onClick={() => format('bold')}><b>B</b></button>
+                <button type="button" className="p-1 hover:bg-gray-200 rounded italic" title="Italic" onClick={() => format('italic')}><i>I</i></button>
+                <button type="button" className="p-1 hover:bg-gray-200 rounded underline" title="Underline" onClick={() => format('underline')}><u>U</u></button>
+                <button type="button" className="p-1 hover:bg-gray-200 rounded" title="Bulleted List" onClick={() => format('insertUnorderedList')}>• List</button>
+                <button type="button" className="p-1 hover:bg-gray-200 rounded" title="Numbered List" onClick={() => format('insertOrderedList')}>1. List</button>
+                <button type="button" className="p-1 hover:bg-gray-200 rounded" title="Heading" onClick={() => format('formatBlock', 'H2')}>H2</button>
+                <button type="button" className="p-1 hover:bg-gray-200 rounded" title="Link" onClick={insertLink}>🔗</button>
+                <button type="button" className="p-1 hover:bg-gray-200 rounded" title="Remove Format" onClick={() => format('removeFormat')}>Tx</button>
+              </div>
+              <div
+                ref={editorRef}
+                className="w-full border border-gray-300 rounded px-3 py-2 h-32 min-h-[8rem] bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 overflow-auto"
+                contentEditable={!saving}
+                suppressContentEditableWarning={true}
+                onInput={handleContentInput}
+                style={{ minHeight: '8rem' }}
+              ></div>
+              <div className="text-xs text-gray-400 mt-1">You can use formatting (bold, italic, lists, headings, links, etc.)</div>
+            </div>
+            <div className="mb-6">
+              <label className="block text-gray-700 font-medium mb-1">Author</label>
+              <input
+                type="text"
+                className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                value={author}
+                onChange={(e) => setAuthor(e.target.value)}
+                maxLength={40}
+                placeholder="Your name"
+                disabled={saving}
+              />
+            </div>
+            <div className="flex gap-2">
+              <button
+                className="bg-blue-600 text-white font-semibold py-2 px-4 rounded hover:bg-blue-700 transition-colors"
+                onClick={handleSubmit}
+                disabled={saving}
+              >
+                {saving ? 'Saving...' : 'Save Changes'}
+              </button>
+              <button
+                className="bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded hover:bg-gray-300 transition-colors"
+                onClick={onCancel}
+                disabled={saving}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        );
+      }
+
+      // PostPage component: displays a single full blog post
+      function PostPage({ posts, loading, onDelete, onEdit }) {
+        const { id } = useParams();
+        const history = useHistory();
+        const [editing, setEditing] = React.useState(false);
+        const [saving, setSaving] = React.useState(false);
+        const [error, setError] = React.useState("");
+        if (loading) {
+          return <div className="mt-24 text-center text-gray-500">Loading...</div>;
+        }
+        const post = posts.find((p) => String(p.id) === id);
+        if (!post) {
+          return (
+            <div className="mt-24 text-center text-gray-500">
+              Post not found.
+              <div>
+                <button
+                  className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                  onClick={() => history.push("/")}
+                >
+                  Back to Home
+                </button>
+              </div>
+            </div>
+          );
+        }
+        const handleDelete = () => {
+          if (window.confirm('Delete this post?')) {
+            onDelete(post.id, () => history.push('/'));
+          }
+        };
+        const handleEdit = () => setEditing(true);
+        const handleCancel = () => setEditing(false);
+        const handleSave = async (updated) => {
+          setSaving(true);
+          setError("");
+          try {
+            await onEdit(post.id, updated);
+            setEditing(false);
+          } catch (e) {
+            setError("Failed to save changes.");
+          } finally {
+            setSaving(false);
+          }
+        };
+        if (editing) {
+          return <EditPostForm post={post} onSave={handleSave} saving={saving} onCancel={handleCancel} />;
+        }
+        return (
+          <div className="max-w-2xl mx-auto bg-white rounded-lg shadow p-8 mt-24 relative">
+            <h1 className="text-3xl font-bold text-gray-900 mb-4">{post.title}</h1>
+            <div className="mb-6 text-gray-500 text-sm flex justify-between">
+              <span>By {post.author}</span>
+              <span>{post.date}</span>
+            </div>
+            <div className="prose prose-lg text-gray-800 mb-8" dangerouslySetInnerHTML={{ __html: post.content }} />
+            {error && <div className="mb-4 text-red-600 text-sm">{error}</div>}
+            <div className="flex gap-2">
+              <button
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                onClick={() => history.push("/")}
+              >
+                Back to Home
+              </button>
+              <button
+                className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+                onClick={handleEdit}
+              >
+                Edit
+              </button>
+              <button
+                className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+                onClick={handleDelete}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        );
+      }
+
+      // CreatePostForm component: form to create a new blog post
+      function CreatePostForm({ onAddPost, creating }) {
+        // Local state for form fields
+        const [title, setTitle] = React.useState("");
+        const [content, setContent] = React.useState("");
+        const [author, setAuthor] = React.useState("Cornel"); // Prefill with Cornel
+        const [error, setError] = React.useState("");
+        const [success, setSuccess] = React.useState(false);
+        const history = useHistory();
+        const editorRef = React.useRef(null);
+
+        // Handle form submission
+        const handleSubmit = async () => {
+          if (!title.trim() || !content.trim() || !author.trim()) {
+            setError("All fields are required.");
+            return;
+          }
+          setError("");
+          setSuccess(false);
+          try {
+            await onAddPost({ title: title.trim(), content: content.trim(), author: author.trim() });
+            setSuccess(true);
+            setTimeout(() => history.push("/"), 500);
+          } catch (e) {
+            setError("Failed to create post. Try again.");
+          }
+        };
+
+        // Handler for rich text editor
+        const handleContentInput = (e) => {
+          setContent(e.currentTarget.innerHTML);
+        };
+
+        // Toolbar actions
+        const format = (command, value = null) => {
+          document.execCommand(command, false, value);
+          // Update content state after formatting
+          if (editorRef.current) {
+            setContent(editorRef.current.innerHTML);
+            editorRef.current.focus();
+          }
+        };
+
+        // Prompt for link
+        const insertLink = () => {
+          const url = prompt('Enter the URL');
+          if (url) format('createLink', url);
+        };
+
+        return (
+          <div className="max-w-xl mx-auto bg-white rounded-lg shadow p-8 mt-24">
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">Create New Post</h2>
+            {error && (
+              <div className="mb-4 text-red-600 text-sm">{error}</div>
+            )}
+            {success && (
+              <div className="mb-4 text-green-600 text-sm">Post created!</div>
+            )}
+            <div className="mb-4">
+              <label className="block text-gray-700 font-medium mb-1">Title</label>
+              <input
+                type="text"
+                className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                maxLength={100}
+                placeholder="Enter post title"
+                disabled={creating}
+              />
+            </div>
+            <div className="mb-4">
+              <label className="block text-gray-700 font-medium mb-1">Content</label>
+              {/* Toolbar */}
+              <div className="flex flex-wrap gap-1 mb-2 bg-gray-50 border border-gray-200 rounded px-2 py-1">
+                <button type="button" className="p-1 hover:bg-gray-200 rounded" title="Bold" onClick={() => format('bold')}><b>B</b></button>
+                <button type="button" className="p-1 hover:bg-gray-200 rounded italic" title="Italic" onClick={() => format('italic')}><i>I</i></button>
+                <button type="button" className="p-1 hover:bg-gray-200 rounded underline" title="Underline" onClick={() => format('underline')}><u>U</u></button>
+                <button type="button" className="p-1 hover:bg-gray-200 rounded" title="Bulleted List" onClick={() => format('insertUnorderedList')}>• List</button>
+                <button type="button" className="p-1 hover:bg-gray-200 rounded" title="Numbered List" onClick={() => format('insertOrderedList')}>1. List</button>
+                <button type="button" className="p-1 hover:bg-gray-200 rounded" title="Heading" onClick={() => format('formatBlock', 'H2')}>H2</button>
+                <button type="button" className="p-1 hover:bg-gray-200 rounded" title="Link" onClick={insertLink}>🔗</button>
+                <button type="button" className="p-1 hover:bg-gray-200 rounded" title="Remove Format" onClick={() => format('removeFormat')}>Tx</button>
+              </div>
+              <div
+                ref={editorRef}
+                className="w-full border border-gray-300 rounded px-3 py-2 h-32 min-h-[8rem] bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 overflow-auto"
+                contentEditable={!creating}
+                suppressContentEditableWarning={true}
+                onInput={handleContentInput}
+                style={{ minHeight: '8rem' }}
+                placeholder="Write your post content here..."
+              ></div>
+              <div className="text-xs text-gray-400 mt-1">You can use formatting (bold, italic, lists, headings, links, etc.)</div>
+            </div>
+            <div className="mb-6">
+              <label className="block text-gray-700 font-medium mb-1">Author</label>
+              <input
+                type="text"
+                className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                value={author}
+                onChange={(e) => setAuthor(e.target.value)}
+                maxLength={40}
+                placeholder="Your name"
+                disabled={creating}
+              />
+            </div>
+            <button
+              className="w-full bg-blue-600 text-white font-semibold py-2 rounded hover:bg-blue-700 transition-colors"
+              onClick={handleSubmit}
+              disabled={creating}
+            >
+              {creating ? 'Publishing...' : 'Publish Post'}
+            </button>
+          </div>
+        );
+      }
+
+      // HomePage component: displays the list of posts
+      function HomePage({ posts, loading, error, onDelete }) {
+        if (loading) {
+          return <div className="mt-24 text-center text-gray-500">Loading...</div>;
+        }
+        if (error) {
+          return <div className="mt-24 text-center text-red-500">{error}</div>;
+        }
+        return (
+          <div className="max-w-3xl mx-auto px-4 mt-24">
+            <h1 className="text-3xl font-bold text-gray-900 mb-8">Latest Posts</h1>
+            <PostList posts={posts} onDelete={onDelete} />
+          </div>
+        );
+      }
+
+      // Main App component: manages posts state and routes
+      function App() {
+        // State for all posts
+        const [posts, setPosts] = React.useState([]);
+        const [loading, setLoading] = React.useState(true);
+        const [error, setError] = React.useState("");
+        const [creating, setCreating] = React.useState(false);
+
+        // Fetch posts from backend
+        const fetchPosts = async () => {
+          setLoading(true);
+          setError("");
+          try {
+            const res = await fetch(API_URL);
+            if (!res.ok) throw new Error('Failed to fetch posts');
+            const data = await res.json();
+            setPosts(data);
+          } catch (e) {
+            setError("Failed to load posts. Is the backend running?");
+          } finally {
+            setLoading(false);
+          }
+        };
+
+        React.useEffect(() => {
+          fetchPosts();
+        }, []);
+
+        // Add a new post via backend
+        const addPost = async (post) => {
+          setCreating(true);
+          try {
+            const res = await fetch(API_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(post),
+            });
+            if (!res.ok) throw new Error('Failed to create post');
+            await fetchPosts(); // Refresh posts
+          } finally {
+            setCreating(false);
+          }
+        };
+
+        // Delete a post via backend
+        const deletePost = async (id, cb) => {
+          if (!id) return;
+          try {
+            const res = await fetch(`${API_URL}/${id}`, { method: 'DELETE' });
+            if (!res.ok) throw new Error('Failed to delete post');
+            await fetchPosts(); // Refresh posts
+            if (cb) cb();
+          } catch (e) {
+            alert('Failed to delete post.');
+          }
+        };
+
+        // Edit a post via backend
+        const editPost = async (id, updated) => {
+          if (!id) return;
+          await fetch(`${API_URL}/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updated),
+          });
+          await fetchPosts(); // Refresh posts
+        };
+
+        return (
+          <BrowserRouter>
+            <NavBar />
+            <div className="pt-20 pb-8 min-h-screen bg-gray-50">
+              <Switch>
+                <Route exact path="/" render={() => <HomePage posts={posts} loading={loading} error={error} onDelete={deletePost} />} />
+                <Route path="/post/:id" render={() => <PostPage posts={posts} loading={loading} onDelete={deletePost} onEdit={editPost} />} />
+                <Route path="/create" render={() => <CreatePostForm onAddPost={addPost} creating={creating} />} />
+                {/* Fallback route */}
+                <Route
+                  render={() => (
+                    <div className="mt-24 text-center text-gray-500">
+                      Page not found.
+                      <div>
+                        <Link
+                          to="/"
+                          className="mt-4 inline-block px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                        >
+                          Back to Home
+                        </Link>
+                      </div>
+                    </div>
+                  )}
+                />
+              </Switch>
+            </div>
+          </BrowserRouter>
+        );
+      }
+
+      // Render the App into the root div
+      ReactDOM.render(<App />, document.getElementById("root"));
+    </script>
+    <!--
+      Cornel's Blog SPA (Backend API version)
+      - React + React Router v5 + Tailwind CSS via CDN
+      - Data is loaded from and saved to the Node.js backend
+      - See inline comments for code explanations
+    -->
+  </body>
+</html>
