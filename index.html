@@ -26,8 +26,10 @@
         useParams,
       } = ReactRouterDOM;
 
-      // API base URL
-      const API_URL = 'http://localhost:4000/posts';
+      // API base URL - will use deployed URL when available, fallback to localhost
+      const API_URL = window.location.hostname === 'localhost' 
+        ? 'http://localhost:4000/posts' 
+        : 'https://YOUR_ACTUAL_BACKEND_URL.onrender.com/posts';
 
       // NavBar component: sticky navigation bar
       function NavBar() {
